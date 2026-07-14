@@ -1,8 +1,10 @@
 import logging
+import os
 from typing import Any
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from gps_reader import get_telemetry, start_gps_reader, stop_gps_reader
 from models import Telemetry
 
@@ -30,6 +32,18 @@ app = FastAPI(
     version="0.1.0",
     description="GPS telemetry and industrial controls edge service.",
     lifespan=lifespan,
+)
+
+# Configure CORS middleware to support local frontend connections
+cors_origins_raw = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173")
+origins = [origin.strip() for origin in cors_origins_raw.split(",") if origin.strip()]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

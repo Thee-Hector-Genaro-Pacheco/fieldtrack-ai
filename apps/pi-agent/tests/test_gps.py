@@ -152,6 +152,7 @@ def test_stale_telemetry_detection():
     tel_stale = state.get_telemetry_snapshot(public_demo_mode=False, stale_after_seconds=5)
     assert tel_stale.device_health.status == "degraded"
     assert tel_stale.fix is False  # Fix gets cleared if data is stale
+    assert tel_stale.device_health.data_age_seconds is not None
     assert tel_stale.device_health.data_age_seconds > 5
 
 
@@ -174,8 +175,12 @@ def test_coordinate_privacy():
     assert tel1.longitude == tel2.longitude
     
     # Check that they have at most 4 decimal places
-    assert round(tel1.latitude, 4) == tel1.latitude
-    assert round(tel1.longitude, 4) == tel1.longitude
+    lat = tel1.latitude
+    lon = tel1.longitude
+    assert lat is not None
+    assert lon is not None
+    assert round(lat, 4) == lat
+    assert round(lon, 4) == lon
 
 
 @patch('serial.Serial')
@@ -207,6 +212,7 @@ def test_serial_reconnect_backoff(mock_serial_cls):
         
         # Verify reconnect attempts incremented
         assert state.reconnect_attempts >= 1
+        assert state.last_error is not None
         assert "Port busy or not found" in state.last_error
         # The serial port should not crash the app, but log and retry
         assert mock_sleep.called

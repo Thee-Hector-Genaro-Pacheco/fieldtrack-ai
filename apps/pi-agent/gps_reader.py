@@ -32,7 +32,7 @@ class GPSState:
         self.parse_errors = 0
         self.reconnect_attempts = 0
         self.serial_connected = False
-        self.last_error = None
+        self.last_error: Optional[str] = None
         
         self.last_sentence_at = None   # datetime, UTC timezone-aware
         
