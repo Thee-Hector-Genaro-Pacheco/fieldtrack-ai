@@ -29,3 +29,7 @@ __pycache__/
 
 # Logs
 *.log
+
+# FieldTrack AI runtime captures
+apps/pi-agent/snapshots/*
+!apps/pi-agent/snapshots/.gitkeep
