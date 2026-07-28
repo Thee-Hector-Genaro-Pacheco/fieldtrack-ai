@@ -37,10 +37,11 @@ export const Header: React.FC<HeaderProps> = ({ data, isConnected }) => {
 
   const getSourceBadge = () => {
     const src = data?.source ?? 'mock';
+    const isLive = src === 'live' || src === 'hardware';
     return (
       <StatusBadge
         label={`SRC: ${src.toUpperCase()}`}
-        status={src === 'hardware' ? 'success' : 'info'}
+        status={isLive ? 'success' : 'info'}
       />
     );
   };

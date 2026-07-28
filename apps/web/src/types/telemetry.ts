@@ -1,6 +1,6 @@
 export interface DeviceHealth {
   status: 'healthy' | 'degraded' | 'error';
-  gps_mode: 'hardware' | 'mock';
+  gps_mode: 'live' | 'hardware' | 'mock' | string;
   serial_connected: boolean;
   sentences_received: number;
   sentences_parsed: number;
@@ -23,6 +23,6 @@ export interface TelemetryResponse {
   satellites_in_view: number | null;
   hdop: number | null;
   speed_kph: number | null;
-  source: 'hardware' | 'mock';
+  source: 'live' | 'hardware' | 'mock' | string;
   device_health: DeviceHealth;
 }

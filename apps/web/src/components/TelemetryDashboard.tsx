@@ -3,6 +3,7 @@ import { useTelemetry } from '../hooks/useTelemetry';
 import { Header } from './Header';
 import { PositionPanel } from './PositionPanel';
 import { DeviceHealthPanel } from './DeviceHealthPanel';
+import { MapPanel } from './MapPanel';
 import { AlertTriangle, ShieldAlert, AlertCircle, WifiOff } from 'lucide-react';
 
 export const TelemetryDashboard: React.FC = () => {
@@ -76,6 +77,7 @@ export const TelemetryDashboard: React.FC = () => {
       <main className="dashboard-grid">
         <PositionPanel data={data} loading={loading} />
         <DeviceHealthPanel data={data} loading={loading} />
+        <MapPanel data={data} loading={loading} />
       </main>
 
       {/* Privacy Notice Banner */}

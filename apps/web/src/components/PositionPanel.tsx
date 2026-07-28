@@ -3,6 +3,8 @@ import { Compass, Gauge, ArrowUp, Satellite, Hash } from 'lucide-react';
 import type { TelemetryResponse } from '../types/telemetry';
 import { MetricCard } from './MetricCard';
 
+import { formatGeneralizedCoordinate } from '../lib/privacy';
+
 interface PositionPanelProps {
   data: TelemetryResponse | null;
   loading: boolean;
@@ -20,13 +22,7 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ data, loading }) =
 
   // Formatting helpers
   const formatCoordinate = (val: number | null | undefined, isLat: boolean) => {
-    if (val === null || val === undefined) return 'N/A';
-    const absVal = Math.abs(val).toFixed(6);
-    if (isLat) {
-      return `${absVal}° ${val >= 0 ? 'N' : 'S'}`;
-    } else {
-      return `${absVal}° ${val >= 0 ? 'E' : 'W'}`;
-    }
+    return formatGeneralizedCoordinate(val, isLat);
   };
 
   const formatSpeed = (val: number | null | undefined) => {

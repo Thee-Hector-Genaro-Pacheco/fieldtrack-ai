@@ -12,9 +12,10 @@ logger = logging.getLogger("pi-agent")
 class GPSState:
     def __init__(self, mode: str):
         self._lock = threading.Lock()
-        self.mode = mode
+        self.configured_mode = mode.lower()  # 'auto', 'hardware', 'live', 'mock'
+        self.port = os.getenv("GPS_SERIAL_PORT", "/dev/ttyAMA0")
         
-        # GPS parameters
+        # Real GPS parameters
         self.fix = False
         self.timestamp = None           # datetime, UTC timezone-aware
         self.latitude = None
@@ -36,9 +37,24 @@ class GPSState:
         
         self.last_sentence_at = None   # datetime, UTC timezone-aware
         
+        # Mock generator fallback state
+        self.mock_lat = 33.73
+        self.mock_lon = -118.29
+        self.mock_speed = 15.4
+        self.mock_heading = 45.0
+        
         # Coordinate Privacy (stable session-level offset)
         self.demo_offset_lat = random.uniform(-0.05, 0.05)
         self.demo_offset_lon = random.uniform(-0.05, 0.05)
+        self._last_log_state = None
+
+    @property
+    def mode(self) -> str:
+        return self.configured_mode
+
+    @mode.setter
+    def mode(self, value: str):
+        self.configured_mode = value.lower()
 
     def update_from_nmea(self, sentence: str) -> bool:
         """
@@ -142,7 +158,9 @@ class GPSState:
 
     def get_telemetry_snapshot(self, public_demo_mode: bool, stale_after_seconds: float) -> Telemetry:
         """
-        Returns a thread-safe snapshot/copy of the telemetry data.
+        Returns a thread-safe snapshot/copy of telemetry data.
+        Selects 'live' source when serial is connected and receiving NMEA sentences within timeout,
+        otherwise falls back to 'mock' source with explicit fallback logging.
         """
         with self._lock:
             now = datetime.now(timezone.utc)
@@ -150,10 +168,68 @@ class GPSState:
             if self.last_sentence_at is not None:
                 data_age = (now - self.last_sentence_at).total_seconds()
             
+            is_explicit_mock = self.configured_mode in ("mock", "demo")
+            has_recent_data = (
+                self.last_sentence_at is not None
+                and data_age is not None
+                and data_age <= stale_after_seconds
+            )
+            is_live_active = not is_explicit_mock and self.serial_connected and has_recent_data
+
+            if is_live_active:
+                active_source = "live"
+                active_gps_mode = "live"
+                fallback_reason = None
+                current_fix = self.fix
+                lat = self.latitude
+                lon = self.longitude
+                alt = self.altitude_meters
+                sats_used = self.satellites_used
+                sats_view = self.satellites_in_view
+                hdop_val = self.hdop
+                speed = self.speed_kph
+                ts = self.timestamp
+            else:
+                active_source = "mock"
+                active_gps_mode = "mock"
+                # If explicit mock mode, fix is active; if live serial has no fix/stale, fix is False
+                if is_explicit_mock:
+                    current_fix = True
+                    lat = self.mock_lat
+                    lon = self.mock_lon
+                    alt = 31.6
+                    sats_used = 8
+                    sats_view = 12
+                    hdop_val = 0.9
+                    speed = self.mock_speed
+                    ts = now
+                else:
+                    current_fix = self.fix if self.serial_connected and not (data_age and data_age > stale_after_seconds) else False
+                    lat = self.latitude if self.latitude is not None else self.mock_lat
+                    lon = self.longitude if self.longitude is not None else self.mock_lon
+                    alt = self.altitude_meters
+                    sats_used = self.satellites_used
+                    sats_view = self.satellites_in_view
+                    hdop_val = self.hdop
+                    speed = self.speed_kph
+                    ts = self.timestamp or now
+
+                if is_explicit_mock:
+                    fallback_reason = "Explicit mock mode enabled in configuration (GPS_MODE=mock)"
+                elif not self.serial_connected:
+                    fallback_reason = f"Serial port {self.port} unavailable: {self.last_error or 'Serial device disconnected'}"
+                elif self.last_sentence_at is None:
+                    fallback_reason = f"No NMEA sentence received yet on serial port {self.port}"
+                else:
+                    fallback_reason = f"Telemetry data stale (> {stale_after_seconds:.1f}s since last NMEA sentence on {self.port})"
+
+            # Health status
             is_stale = (data_age is not None and data_age > stale_after_seconds)
             is_never_received = (self.last_sentence_at is None)
             
-            if self.mode == "hardware" and not self.serial_connected:
+            if is_explicit_mock:
+                health_status = "healthy"
+            elif not self.serial_connected:
                 health_status = "unhealthy"
             elif is_never_received or is_stale:
                 health_status = "degraded"
@@ -161,55 +237,57 @@ class GPSState:
                 health_status = "degraded"
             else:
                 health_status = "healthy"
-                
-            current_fix = self.fix
-            if is_stale:
-                current_fix = False
-            
-            lat = self.latitude
-            lon = self.longitude
+
+            # Log source decision when state changes
+            log_key = (active_source, self.port, current_fix, fallback_reason)
+            if log_key != self._last_log_state:
+                self._last_log_state = log_key
+                logger.info(
+                    f"[TELEMETRY SOURCE] Selected: '{active_source}' | Port: '{self.port}' | "
+                    f"Serial Connected: {self.serial_connected} | Fix Status: {current_fix} | "
+                    f"Fallback Reason: {fallback_reason or 'None'}"
+                )
+
             if public_demo_mode and lat is not None and lon is not None:
-                # Add stable session-level offset and round to 4 decimal places
                 lat = round(lat + self.demo_offset_lat, 4)
                 lon = round(lon + self.demo_offset_lon, 4)
-            
+
             uptime = (now - self.startup_time).total_seconds()
-            
             cpu_temp = None
-            if self.mode == "hardware":
+            if not is_explicit_mock:
                 try:
                     if os.path.exists("/sys/class/thermal/thermal_zone0/temp"):
                         with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
                             cpu_temp = float(f.read().strip()) / 1000.0
                 except Exception:
                     pass
-            
+
             health = DeviceHealth(
                 status=health_status,
-                gps_mode=self.mode,
-                serial_connected=self.serial_connected if self.mode == "hardware" else True,
+                gps_mode=active_gps_mode,
+                serial_connected=self.serial_connected if not is_explicit_mock else True,
                 sentences_received=self.sentences_received,
                 sentences_parsed=self.sentences_parsed,
                 parse_errors=self.parse_errors,
                 reconnect_attempts=self.reconnect_attempts,
-                last_error=self.last_error,
+                last_error=self.last_error or fallback_reason,
                 cpu_temperature_c=cpu_temp,
                 uptime_seconds=uptime,
                 last_sentence_at=self.last_sentence_at,
                 data_age_seconds=data_age
             )
-            
+
             return Telemetry(
                 fix=current_fix,
-                timestamp=self.timestamp,
+                timestamp=ts,
                 latitude=lat,
                 longitude=lon,
-                altitude_meters=self.altitude_meters,
-                satellites_used=self.satellites_used,
-                satellites_in_view=self.satellites_in_view,
-                hdop=self.hdop,
-                speed_kph=self.speed_kph,
-                source=self.mode,
+                altitude_meters=alt,
+                satellites_used=sats_used,
+                satellites_in_view=sats_view,
+                hdop=hdop_val,
+                speed_kph=speed,
+                source=active_source,
                 device_health=health
             )
 
@@ -222,7 +300,7 @@ _stop_event = threading.Event()
 def get_gps_state() -> GPSState:
     global _gps_state
     if _gps_state is None:
-        mode = os.getenv("GPS_MODE", "mock").lower()
+        mode = os.getenv("GPS_MODE", "auto").lower()
         _gps_state = GPSState(mode=mode)
     return _gps_state
 
@@ -305,10 +383,10 @@ def mock_reader_loop(state: GPSState, stop_event: threading.Event):
 
 
 def serial_reader_loop(state: GPSState, stop_event: threading.Event):
-    port = os.getenv("GPS_SERIAL_PORT", "/dev/ttyAMA0")
+    port = state.port
     baud = int(os.getenv("GPS_BAUD_RATE", "9600"))
     
-    logger.info(f"GPS_MODE is hardware: starting background serial thread on {port} at {baud} baud.")
+    logger.info(f"Starting background serial thread on {port} at {baud} baud.")
     
     backoff_delay = 1.0
     max_backoff = 30.0
@@ -357,14 +435,14 @@ def start_gps_reader():
     
     _stop_event.clear()
     
-    if state.mode == "mock":
+    if state.configured_mode in ("mock", "demo"):
         target_fn = mock_reader_loop
     else:
         target_fn = serial_reader_loop
         
     _reader_thread = threading.Thread(target=target_fn, args=(state, _stop_event), daemon=True)
     _reader_thread.start()
-    logger.info("GPS reader thread started.")
+    logger.info(f"GPS reader thread started in mode '{state.configured_mode}'.")
 
 
 def stop_gps_reader():
