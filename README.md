@@ -183,6 +183,7 @@ The physical hardware architecture consists of off-the-shelf industrial and hobb
 | **GPS Module** | u-blox NEO-6M GPS Receiver with Ceramic Antenna | UART (`/dev/ttyAMA0`) @ 9600 Baud | Real-time global satellite positioning and NMEA ingestion |
 | **Motion Sensor** | HC-SR501 Passive Infrared (PIR) Sensor | Digital Input (GPIO17 / Pin 11) | Human/object motion detection in sensor coverage zone |
 | **Character Display** | 16x2 HD44780 LCD with PCF8574 I2C Backpack | I2C Bus 1 (Address `0x27` / `0x3F`) | Local hardware telemetry and status alert display |
+| **RGB LED Ring** | Freenove 8-Pixel Addressable RGB Module (WS2812B) | GPIO Output (IN-S / GPIO18 / Pin 12) | Visual system state status, animation, motion alerts, and flash |
 | **USB Camera** | Logitech C930e 1080p HD Webcam | USB 2.0/3.0 (`/dev/video0`) | Live MJPEG video stream (720p 30FPS) & snapshots |
 | **Power Supply** | Raspberry Pi 27W USB-C (5.1V / 5A) | USB-C Power Port | Primary system power supply |
 | **Breadboard Rail** | Solderless Breadboard Power Distribution | Jumper Wires to 5V & GND Pins | Centralized 5V VCC and GND distribution for sensors |
@@ -209,6 +210,10 @@ The physical hardware architecture consists of off-the-shelf industrial and hobb
 | **16x2 LCD** | GND | Ground Rail | - | Pin 6 / 9 / 14 | 0V | Ground | Power | Common System Ground | Tied to common ground rail |
 | **16x2 LCD** | SDA | I2C1 SDA | GPIO2 | **Pin 3** | 3.3V Logic | Bidirectional | I2C | Serial Data Line | Pull-up resistor on Pi header |
 | **16x2 LCD** | SCL | I2C1 SCL | GPIO3 | **Pin 5** | 3.3V Logic | Output (from Pi) | I2C | Serial Clock Line | Pull-up resistor on Pi header |
+| **Freenove RGB** | IN-S | GPIO 18 | GPIO18 | **Pin 12** | 3.3V Logic | Output (from Pi) | Addressable WS2812 | Data Signal Input | Connect Pi Pin 12 to IN-S |
+| **Freenove RGB** | IN-V | 5V Power Rail | - | Pin 2 / 4 | 5.0V DC | Power | Power | Module Power | Connect 5V to IN-V |
+| **Freenove RGB** | IN-G | Ground Rail | - | Pin 6 / 9 / 14 | 0V | Ground | Power | Common System Ground | Connect GND to IN-G |
+| **Freenove RGB** | OUT | Unused | - | - | - | - | Cascading | Data Forwarding | Unused unless chaining modules |
 | **Logitech C930e** | USB Cable | USB 3.0 Host | - | USB Port | 5.0V USB | Bidirectional | USB 2.0/3.0 | Video Stream & Snapshots | Linux V4L2 device node `/dev/video0` |
 | **Ethernet** | RJ45 Cable | Gigabit Ethernet | - | RJ45 Port | Network | Bidirectional | Ethernet | Local Network Transport | TCP/IP network connectivity |
 
@@ -222,9 +227,11 @@ The physical hardware architecture consists of off-the-shelf industrial and hobb
    - NEO-6M GPS receiver draw: ~225mW (45mA @ 5V).
    - 16x2 LCD + PCF8574 Backlight draw: ~250mW (50mA @ 5V).
    - HC-SR501 PIR Sensor draw: ~300µA idle / 50mA active.
-   - Total System Power: **~7.5W to 12.0W peak**. Powered by official 27W USB-C power supply.
-2. **Common Ground**: All sensors and modules MUST share a single, common ground reference. Ground loops or floating ground potentials between the GPS module, PIR sensor, LCD, and Raspberry Pi will cause signal corruption and communication drops.
-3. **Logic Level Integrity**: The Raspberry Pi 5 Broadcom BCM2712 SoC inputs are **not 5V tolerant**. Always verify with a digital multimeter (DMM) that signal lines going into GPIO pins do not exceed 3.3V.
+   - Freenove 8 RGB LED Module draw: ~500mW max (100mA @ 5V with 20% brightness cap).
+   - Total System Power: **~8.0W to 12.5W peak**. Powered by official 27W USB-C power supply.
+2. **Common Ground**: All sensors and modules MUST share a single, common ground reference. Ground loops or floating ground potentials between the GPS module, PIR sensor, LCD, RGB LED module, and Raspberry Pi will cause signal corruption and communication drops.
+3. **Logic Level Integrity**: The Raspberry Pi 5 Broadcom BCM2712 SoC inputs are **not 5V tolerant**. Always verify with a digital multimeter (DMM) that signal lines going into GPIO pins do not exceed 3.3V. While 3.3V logic signals sent to the 5V RGB LED module IN-S pin typically work, a 3.3V-to-5V level shifter is recommended for long cable runs.
+4. **Raspberry Pi 5 RP1 Controller Driver Limitation**: The Raspberry Pi 5 replaces legacy peripheral registers with the custom RP1 I/O controller, rendering traditional `/dev/mem` DMA access used by `rpi_ws281x` unsupported unless SPI `/dev/spidev0.0` or custom overlays are configured. The agent safely falls back to `MockRGBDriver` whenever hardware access is unavailable.
 
 ---
 

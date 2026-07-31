@@ -11,7 +11,10 @@ export interface DeviceHealth {
   uptime_seconds: number;
   last_sentence_at: string | null;
   data_age_seconds: number;
+  rgb_online?: boolean;
+  rgb_state?: string;
 }
+
 
 export interface TelemetryResponse {
   fix: boolean;

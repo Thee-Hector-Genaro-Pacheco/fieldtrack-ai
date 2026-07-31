@@ -188,6 +188,14 @@ class CameraService:
 
         logger.info(f"Saved snapshot to {filepath}")
 
+        # Trigger RGB snapshot flash
+        try:
+            from rgb_service import get_rgb_service
+            get_rgb_service().trigger_snapshot_flash()
+        except Exception:
+            pass
+
+
         return SnapshotResponse(
             filename=filename,
             timestamp=now,

@@ -78,3 +78,14 @@ class MotionEvent(BaseModel):
     longitude: Optional[float] = None
     fix: bool = False
     simulated: bool = False
+
+
+class RGBStatus(BaseModel):
+    online: bool
+    mock_mode: bool
+    gpio_pin: int
+    pixel_count: int
+    current_state: str
+    brightness: float
+    last_error: Optional[str]
+    last_updated_at: datetime

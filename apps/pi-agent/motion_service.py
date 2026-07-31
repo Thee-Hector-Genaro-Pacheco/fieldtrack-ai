@@ -151,10 +151,16 @@ class MotionService:
             else:
                 self.last_cleared_at = ts
 
-        # Trigger LCD notification
+        # Trigger LCD & RGB notifications
         lcd = get_lcd_service()
         if is_motion_active:
             lcd.notify_motion(ts.strftime("%H:%M:%S"))
+            try:
+                from rgb_service import get_rgb_service
+                get_rgb_service().trigger_motion_detected()
+            except Exception:
+                pass
+
 
         # Auto-snapshot integration on motion start
         if is_motion_active and self.auto_snapshot:
