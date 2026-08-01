@@ -16,3 +16,6 @@ typing_extensions==4.16.0
 uvicorn==0.39.0
 pytest==8.3.1
 httpx==0.27.0
+opencv-python-headless==5.0.0.93
+gpiozero==2.0.1.post3
+lgpio; sys_platform == "linux"
