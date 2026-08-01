@@ -2,7 +2,17 @@ import type { TelemetryResponse } from '../types/telemetry';
 import type { CameraStatusResponse, SnapshotResponse } from '../types/camera';
 import type { MotionStatusResponse, MotionEvent } from '../types/motion';
 
-export const API_BASE_URL = import.meta.env.VITE_PI_AGENT_API_URL || 'http://localhost:8000';
+export const API_BASE_URL =
+  import.meta.env.VITE_PI_AGENT_API_URL ||
+  (typeof window !== 'undefined' && window.location.hostname
+    ? `${window.location.protocol}//${window.location.hostname}:8000`
+    : 'http://localhost:8000');
+
+export const HAND_API_BASE_URL =
+  import.meta.env.VITE_HAND_API_HOST ||
+  (typeof window !== 'undefined' && window.location.hostname
+    ? `${window.location.protocol}//${window.location.hostname}:8001`
+    : 'http://localhost:8001');
 
 export async function fetchTelemetry(): Promise<TelemetryResponse> {
   const response = await fetch(`${API_BASE_URL}/telemetry/current`);
