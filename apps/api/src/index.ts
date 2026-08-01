@@ -52,10 +52,19 @@ async function main() {
   wsServer.start();
 
   // Wire Camera Frame Pipeline -> MediaPipe Detection -> WS Broadcast
+  let isProcessing = false;
   cameraService.on('frame', async (frame) => {
-    const detectionResult = await handDetector.detect(frame);
-    const actualFps = cameraService.getActualFps();
-    wsServer.broadcast(detectionResult, actualFps);
+    if (isProcessing) return; // Drop stale frame if previous inference cycle is active
+    isProcessing = true;
+    try {
+      const detectionResult = await handDetector.detect(frame);
+      const actualFps = cameraService.getActualFps();
+      wsServer.broadcast(detectionResult, actualFps);
+    } catch (err) {
+      console.error('[Pipeline] Error processing frame:', err);
+    } finally {
+      isProcessing = false;
+    }
   });
 
   // Start Camera Acquisition
