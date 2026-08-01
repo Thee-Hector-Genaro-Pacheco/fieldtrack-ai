@@ -29,7 +29,12 @@ export class CameraService extends EventEmitter {
   public async start(): Promise<void> {
     if (this.isRunning) return;
     this.isRunning = true;
-    console.log(`[CameraService] Initializing camera acquisition pipeline (${this.width}x${this.height} @ ${this.fps} FPS target)...`);
+    console.log(
+      `[CameraService] Consuming camera frames from Python Agent (${CONFIG.PYTHON_AGENT_URL}/camera/stream).`
+    );
+    console.log(
+      `[CameraService] Hardware ownership: /dev/video0 is owned EXCLUSIVELY by Python Pi Agent (port 8000).`
+    );
 
     const intervalMs = Math.floor(1000 / this.fps);
     this.timer = setInterval(() => {

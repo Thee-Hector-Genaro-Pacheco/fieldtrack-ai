@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { CONFIG } from './config.js';
 import { HandDetectionResult } from './fingerCounterService.js';
+import { getNetworkAddresses } from './utils/network.js';
 
 export interface HandCountWSMessage extends HandDetectionResult {
   timestamp: number;
@@ -15,8 +16,13 @@ export class HandCountWebSocketServer {
 
   public start(): void {
     try {
-      this.wss = new WebSocketServer({ port: this.port });
-      console.log(`[WebSocketServer] Hand Count WebSocket Server listening on ws://localhost:${this.port}`);
+      this.wss = new WebSocketServer({ port: this.port, host: CONFIG.HOST });
+      const networkIps = getNetworkAddresses();
+      console.log(`[WebSocketServer] Bound to interface: ${CONFIG.HOST}:${this.port}`);
+      console.log(`[WebSocketServer] Listening at ws://${CONFIG.HOST}:${this.port}`);
+      networkIps.forEach((ip) => {
+        console.log(`[WebSocketServer] Accessible on network: ws://${ip}:${this.port}`);
+      });
 
       this.wss.on('connection', (ws: WebSocket, req) => {
         const clientIp = req.socket.remoteAddress || 'unknown';

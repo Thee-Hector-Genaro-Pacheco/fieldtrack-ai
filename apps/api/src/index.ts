@@ -5,6 +5,8 @@ import { CameraService } from './cameraService.js';
 import { HandDetectorService } from './handDetectorService.js';
 import { HandCountWebSocketServer } from './websocketServer.js';
 
+import { getNetworkAddresses } from './utils/network.js';
+
 async function main() {
   console.log('---------------------------------------------------------');
   console.log('🚀 FieldTrack AI - Real-time Hand & Finger Counter API');
@@ -36,8 +38,15 @@ async function main() {
   });
 
   // Launch HTTP & WS servers
-  app.listen(CONFIG.PORT, () => {
-    console.log(`[HTTP Server] REST API listening at http://localhost:${CONFIG.PORT}`);
+  const server = app.listen(CONFIG.PORT, CONFIG.HOST, () => {
+    const addr = server.address();
+    const boundStr = typeof addr === 'string' ? addr : `${addr?.address}:${addr?.port}`;
+    const networkIps = getNetworkAddresses();
+    console.log(`[HTTP Server] REST API bound to interface: ${boundStr}`);
+    console.log(`[HTTP Server] Listening locally at http://${CONFIG.HOST}:${CONFIG.PORT}`);
+    networkIps.forEach((ip) => {
+      console.log(`[HTTP Server] Accessible on network: http://${ip}:${CONFIG.PORT}`);
+    });
   });
 
   wsServer.start();

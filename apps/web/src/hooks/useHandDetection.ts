@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import type { HandDetectionPayload, UseHandDetectionOptions } from '../types/handDetection';
 
 export const useHandDetection = (options: UseHandDetectionOptions = {}) => {
-  const {
-    wsUrl = `ws://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080`,
-    reconnectInterval = 2500,
-  } = options;
+  const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const envHost = import.meta.env.VITE_HAND_WS_HOST;
+  const host = envHost || (typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost');
+  const wsUrl = options.wsUrl || `${protocol}//${host}:8080`;
+  const reconnectInterval = options.reconnectInterval ?? 2500;
 
   const [data, setData] = useState<HandDetectionPayload>({
     handDetected: false,
