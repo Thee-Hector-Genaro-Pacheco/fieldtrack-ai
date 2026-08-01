@@ -6,6 +6,7 @@ import { DeviceHealthPanel } from './DeviceHealthPanel';
 import { MapPanel } from './MapPanel';
 import { CameraPanel } from './CameraPanel';
 import { MotionPanel } from './MotionPanel';
+import { HandCounterPanel } from './HandCounterPanel';
 import { AlertTriangle, ShieldAlert, AlertCircle, WifiOff } from 'lucide-react';
 
 export const TelemetryDashboard: React.FC = () => {
@@ -77,6 +78,7 @@ export const TelemetryDashboard: React.FC = () => {
       </div>
 
       <main className="dashboard-grid">
+        <HandCounterPanel />
         <PositionPanel data={data} loading={loading} />
         <DeviceHealthPanel data={data} loading={loading} />
         <MotionPanel />

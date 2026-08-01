@@ -1,38 +1,25 @@
-# Python virtual environments
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+**/dist/
+
+# Python virtual environments and caches
 .venv/
 **/.venv/
-
-# Python cache files
 __pycache__/
 **/__pycache__/
-*.py[cod]
-
-# Test and tooling caches
 .pytest_cache/
 **/.pytest_cache/
-.mypy_cache/
-.pyright/
-.ruff_cache/
 
-# Environment secrets
+# Environment files
 .env
-**/.env
-!.env.example
-!**/.env.example
-
-# macOS
-.DS_Store
-
-# IDE files
-.vscode/*
-!.vscode/settings.json
-
-# Logs
-*.log
-
-# FieldTrack AI runtime captures
-apps/pi-agent/snapshots/*
-!apps/pi-agent/snapshots/.gitkeep
+.env.*
 
 # Raspberry Pi camera snapshots
 apps/pi-agent/snapshots/
+
+# macOS
+.DS_Store

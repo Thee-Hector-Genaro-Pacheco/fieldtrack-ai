@@ -2043,13 +2043,208 @@ body {
   font-size: 11px;
 }
 
+/* ----------------------------------------------------
+   AI Hand & Finger Counter Component Styling
+---------------------------------------------------- */
+.hand-counter-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hand-status-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  border: 1px solid var(--border-color);
+}
+
+.hand-status-banner.banner-detected {
+  background: linear-gradient(135deg, rgba(0, 255, 136, 0.08) 0%, rgba(18, 20, 28, 0.95) 100%);
+  border-color: rgba(0, 255, 136, 0.4);
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.1);
+}
+
+.hand-status-banner.banner-undetected {
+  background: linear-gradient(135deg, rgba(36, 41, 54, 0.5) 0%, rgba(18, 20, 28, 0.95) 100%);
+  border-color: var(--border-color);
+}
+
+.status-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.status-emoji-ring {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.status-headline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  letter-spacing: 0.5px;
+}
+
+.detected-text {
+  color: var(--color-green);
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+}
+
+.undetected-text {
+  color: var(--text-secondary);
+}
+
+.status-subtext {
+  margin: 4px 0 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.confidence-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.finger-count-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.count-label-row {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+}
+
+.live-pulse-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-cyan);
+  font-size: 11px;
+}
+
+.count-number-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 8px 0;
+}
+
+.count-big-number {
+  font-size: 84px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.count-big-number.text-cyan {
+  color: var(--color-cyan);
+  text-shadow: 0 0 30px var(--color-cyan-glow);
+}
+
+.count-big-number.text-muted {
+  color: var(--border-color);
+}
+
+.count-unit {
+  font-size: 14px;
+  letter-spacing: 2px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.digit-indicators-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  width: 100%;
+}
+
+.digit-badge {
+  padding: 6px 12px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.digit-badge.digit-active {
+  background: var(--color-cyan-bg);
+  border-color: var(--color-cyan);
+  color: var(--color-cyan);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+}
+
+.payload-inspector {
+  background: #08090c;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.inspector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.payload-json-box {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-green);
+  background: transparent;
+  white-space: pre-wrap;
+}
+
 @media (max-width: 768px) {
   .motion-panel-header {
     flex-direction: column;
     align-items: flex-start;
   }
+
+  .hand-status-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
 }
-
-
-
-
