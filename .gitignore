@@ -33,3 +33,6 @@ __pycache__/
 # FieldTrack AI runtime captures
 apps/pi-agent/snapshots/*
 !apps/pi-agent/snapshots/.gitkeep
+
+# Raspberry Pi camera snapshots
+apps/pi-agent/snapshots/
