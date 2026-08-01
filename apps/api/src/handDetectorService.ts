@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import * as tf from '@tensorflow/tfjs-core';
 import '@tensorflow/tfjs-backend-cpu';
 import * as handPoseDetection from '@tensorflow-models/hand-pose-detection';
@@ -6,33 +8,105 @@ import { CONFIG } from './config.js';
 import { HandLandmarks, FingerCounterService, HandDetectionResult } from './fingerCounterService.js';
 import { CameraFrame } from './cameraService.js';
 
+// Setup file:// fetch interceptor for Node.js so TFJS loads model topology and shards 100% offline
+let isFetchInterceptorInstalled = false;
+function setupOfflineFetchInterceptor() {
+  if (isFetchInterceptorInstalled) return;
+  isFetchInterceptorInstalled = true;
+
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async function (url: string | URL | Request, opts?: RequestInit) {
+    const urlStr = String(url);
+    if (urlStr.startsWith('file://')) {
+      const filePath = urlStr.replace(/^file:\/\//, '');
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`[Offline File Loader] File not found: ${filePath}`);
+      }
+      const data = fs.readFileSync(filePath);
+      const contentType = filePath.endsWith('.json') ? 'application/json' : 'application/octet-stream';
+      return new Response(data, {
+        status: 200,
+        statusText: 'OK',
+        headers: { 'Content-Type': contentType },
+      });
+    }
+    return origFetch(url, opts);
+  };
+}
+
 export class HandDetectorService {
   private isInitialized: boolean = false;
   private maxHands: number = CONFIG.MAX_HANDS;
   private detector: handPoseDetection.HandDetector | null = null;
+  private modelPath: string = '';
 
   constructor() {
     this.initModel();
   }
 
+  private resolveModelBaseDir(): string {
+    const configuredPath = CONFIG.HAND_MODEL_PATH;
+    if (configuredPath.endsWith('model.json')) {
+      // If user passed path to detector/model.json, resolve parent hand-pose directory
+      const parentDir = path.dirname(configuredPath);
+      return parentDir.endsWith('detector') ? path.dirname(parentDir) : parentDir;
+    }
+    return path.resolve(configuredPath);
+  }
+
   private async initModel(): Promise<void> {
     try {
+      console.log('[HandDetectorService] External model download disabled');
+
+      const baseModelDir = this.resolveModelBaseDir();
+      this.modelPath = baseModelDir;
+      console.log(`[HandDetectorService] Loading offline model from: ${baseModelDir}`);
+
+      // Validate existence of all 5 required model topology & weight shard files
+      const requiredFiles = [
+        path.join(baseModelDir, 'detector/model.json'),
+        path.join(baseModelDir, 'detector/group1-shard1of1.bin'),
+        path.join(baseModelDir, 'landmark/model.json'),
+        path.join(baseModelDir, 'landmark/group1-shard1of2.bin'),
+        path.join(baseModelDir, 'landmark/group1-shard2of2.bin'),
+      ];
+
+      const missingFiles = requiredFiles.filter((f) => !fs.existsSync(f));
+      if (missingFiles.length > 0) {
+        console.error('---------------------------------------------------------');
+        console.error('[HandDetectorService] ERROR: Offline model files missing!');
+        console.error('Missing required offline model file(s):');
+        missingFiles.forEach((f) => console.error(`  ❌ ${f}`));
+        console.error('Action Required: Run "npm run setup:models" on Mac, or copy models directory via SCP to Raspberry Pi.');
+        console.error('---------------------------------------------------------');
+        throw new Error(`Missing offline model files: ${missingFiles.join(', ')}`);
+      }
+
+      // Install file:// fetch interceptor before TFJS model loading
+      setupOfflineFetchInterceptor();
+
       console.log('[HandDetectorService] Initializing TensorFlow.js CPU Backend & MediaPipe Hands Detector...');
       await tf.setBackend('cpu');
       await tf.ready();
+
+      const detectorModelUrl = `file://${path.join(baseModelDir, 'detector/model.json')}`;
+      const landmarkModelUrl = `file://${path.join(baseModelDir, 'landmark/model.json')}`;
 
       const model = handPoseDetection.SupportedModels.MediaPipeHands;
       const detectorConfig: handPoseDetection.MediaPipeHandsTfjsModelConfig = {
         runtime: 'tfjs',
         modelType: 'full',
         maxHands: this.maxHands,
+        detectorModelUrl,
+        landmarkModelUrl,
       };
 
       this.detector = await handPoseDetection.createDetector(model, detectorConfig);
       this.isInitialized = true;
+      console.log('[HandDetectorService] Offline model initialized successfully');
       console.log(`[HandDetectorService] MediaPipe Hand Detector ready on ARM64/x86 (maxHands=${this.maxHands}).`);
     } catch (err) {
-      console.error('[HandDetectorService] Fatal error initializing MediaPipe detector:', err);
+      console.error('[HandDetectorService] Fatal error initializing offline MediaPipe detector:', err);
       this.isInitialized = false;
     }
   }

@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import path from 'path';
 dotenv.config();
 
 export const CONFIG = {
@@ -12,4 +13,5 @@ export const CONFIG = {
   MAX_HANDS: parseInt(process.env.MAX_HANDS || '2', 10),
   MIN_DETECTION_CONFIDENCE: parseFloat(process.env.MIN_DETECTION_CONFIDENCE || '0.5'),
   MIN_TRACKING_CONFIDENCE: parseFloat(process.env.MIN_TRACKING_CONFIDENCE || '0.5'),
+  HAND_MODEL_PATH: process.env.HAND_MODEL_PATH || path.join(process.cwd(), 'models/hand-pose'),
 };

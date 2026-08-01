@@ -9,6 +9,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "setup:models": "node scripts/download-models.js",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
