@@ -2,17 +2,44 @@ import type { TelemetryResponse } from '../types/telemetry';
 import type { CameraStatusResponse, SnapshotResponse } from '../types/camera';
 import type { MotionStatusResponse, MotionEvent } from '../types/motion';
 
+const getHost = () =>
+  typeof window !== 'undefined' && window.location.hostname
+    ? window.location.hostname
+    : 'localhost';
+
+const getProtocol = () =>
+  typeof window !== 'undefined' && window.location.protocol
+    ? window.location.protocol
+    : 'http:';
+
 export const API_BASE_URL =
   import.meta.env.VITE_PI_AGENT_API_URL ||
-  (typeof window !== 'undefined' && window.location.hostname
-    ? `${window.location.protocol}//${window.location.hostname}:8000`
-    : 'http://localhost:8000');
+  `${getProtocol()}//${getHost()}:8000`;
 
 export const HAND_API_BASE_URL =
   import.meta.env.VITE_HAND_API_HOST ||
-  (typeof window !== 'undefined' && window.location.hostname
-    ? `${window.location.protocol}//${window.location.hostname}:8001`
-    : 'http://localhost:8001');
+  `${getProtocol()}//${getHost()}:8001`;
+
+export interface HealthResponse {
+  status: string;
+  timestamp: string;
+  gps_mode: string;
+  serial_connected: boolean;
+  camera_online: boolean;
+  motion_online: boolean;
+  motion_state: string;
+  rgb_online: boolean;
+  rgb_state: string;
+}
+
+export async function fetchHealth(): Promise<HealthResponse> {
+  const response = await fetch(`${API_BASE_URL}/health`);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
 
 export async function fetchTelemetry(): Promise<TelemetryResponse> {
   const response = await fetch(`${API_BASE_URL}/telemetry/current`);

@@ -22,7 +22,7 @@ export function useTelemetry(intervalMs = 2000) {
         }
       } catch (err) {
         if (active) {
-          setError(err instanceof Error ? err : new Error('API Unavailable'));
+          setError(err instanceof Error ? err : new Error('Telemetry API Unavailable'));
           setLoading(false);
         }
       }

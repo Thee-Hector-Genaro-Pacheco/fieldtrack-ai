@@ -10,7 +10,7 @@ export interface DeviceHealth {
   cpu_temperature_c: number | null;
   uptime_seconds: number;
   last_sentence_at: string | null;
-  data_age_seconds: number;
+  data_age_seconds: number | null;
   rgb_online?: boolean;
   rgb_state?: string;
 }

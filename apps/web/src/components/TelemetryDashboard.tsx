@@ -1,5 +1,7 @@
 import React from 'react';
 import { useTelemetry } from '../hooks/useTelemetry';
+import { useApiHealth } from '../hooks/useApiHealth';
+import { API_BASE_URL } from '../lib/api';
 import { Header } from './Header';
 import { PositionPanel } from './PositionPanel';
 import { DeviceHealthPanel } from './DeviceHealthPanel';
@@ -7,17 +9,22 @@ import { MapPanel } from './MapPanel';
 import { CameraPanel } from './CameraPanel';
 import { MotionPanel } from './MotionPanel';
 import { HandCounterPanel } from './HandCounterPanel';
-import { AlertTriangle, ShieldAlert, AlertCircle, WifiOff } from 'lucide-react';
+import { AlertTriangle, ShieldAlert, AlertCircle, WifiOff, Terminal } from 'lucide-react';
 
 export const TelemetryDashboard: React.FC = () => {
-  const { data, loading, error, isConnected } = useTelemetry(2000);
+  const { data, loading: telemetryLoading } = useTelemetry(2000);
+  const apiHealth = useApiHealth(3000, 3);
+
+  const isConnected = apiHealth.isConnected;
+  const loading = telemetryLoading && apiHealth.loading;
 
   // Computed states
   const serialDisconnected = data && !data.device_health.serial_connected;
-  const isStale = data && data.device_health.data_age_seconds > 5.0;
+  const dataAge = data?.device_health.data_age_seconds;
+  const isStale = data && dataAge !== null && dataAge !== undefined && dataAge > 5.0;
   const hasParseErrors = data && data.device_health.parse_errors > 0;
 
-  // Render initial loading state when no data exists yet
+  // Render initial loading state when no data exists yet and bootstrapping health check
   if (loading && !data) {
     return (
       <div className="loading-container">
@@ -25,7 +32,7 @@ export const TelemetryDashboard: React.FC = () => {
         <div className="loading-content">
           <div className="loading-spinner"></div>
           <h2 className="loading-title">BOOTSTRAPPING Edge Services</h2>
-          <p className="loading-subtitle">Establishing connection to FieldTrack AI Pi Agent...</p>
+          <p className="loading-subtitle">Establishing connection to FieldTrack AI Pi Agent at <code>{API_BASE_URL}</code>...</p>
           <div className="loading-bar">
             <div className="loading-bar-fill"></div>
           </div>
@@ -38,13 +45,30 @@ export const TelemetryDashboard: React.FC = () => {
     <div className="dashboard-container">
       <Header data={data} isConnected={isConnected} />
 
+      {/* Dev Diagnostics Panel */}
+      {import.meta.env.DEV && (
+        <div className="dev-diagnostics-bar font-mono text-xs" style={{ margin: '0.75rem 0', padding: '0.6rem 1rem', background: 'rgba(15, 23, 42, 0.85)', border: '1px solid rgba(6, 182, 212, 0.3)', borderRadius: '6px', color: '#67e8f9' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, marginBottom: '0.35rem', color: '#22d3ee' }}>
+            <Terminal size={14} />
+            <span>DEV DIAGNOSTICS</span>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.25rem' }}>
+            <div><span style={{ color: '#94a3b8' }}>API URL:</span> {apiHealth.apiUrl}</div>
+            <div><span style={{ color: '#94a3b8' }}>Health Status:</span> {apiHealth.health?.status || 'N/A'}</div>
+            <div><span style={{ color: '#94a3b8' }}>Consecutive Failures:</span> {apiHealth.consecutiveFailures}</div>
+            <div><span style={{ color: '#94a3b8' }}>Last Success:</span> {apiHealth.lastSuccessTime ? apiHealth.lastSuccessTime.toLocaleTimeString() : 'None'}</div>
+            <div><span style={{ color: '#94a3b8' }}>Telemetry Source:</span> {data?.source ? data.source.toUpperCase() : 'UNKNOWN'}</div>
+          </div>
+        </div>
+      )}
+
       {/* System Warning Banners */}
       <div className="alerts-container">
-        {error && (
+        {!isConnected && (
           <div className="alert-banner alert-danger animate-pulse">
             <WifiOff size={18} className="alert-icon" />
             <div className="alert-text">
-              <strong>API Connection Loss:</strong> Unable to connect to Pi Agent. Please verify the agent service is running at <code>{import.meta.env.VITE_PI_AGENT_API_URL || 'http://localhost:8000'}</code>.
+              <strong>API Connection Loss:</strong> Unable to connect to Pi Agent. Please verify the agent service is running at <code>{API_BASE_URL}</code>.
             </div>
           </div>
         )}
@@ -62,7 +86,7 @@ export const TelemetryDashboard: React.FC = () => {
           <div className="alert-banner alert-warning animate-pulse">
             <AlertCircle size={18} className="alert-icon" />
             <div className="alert-text">
-              <strong>Stale Telemetry:</strong> No GPS NMEA sentences received for {data?.device_health.data_age_seconds.toFixed(1)}s (threshold: 5s). Position data may be outdated.
+              <strong>Stale Telemetry:</strong> No GPS NMEA sentences received for {dataAge?.toFixed(1) ?? 'N/A'}s (threshold: 5s). Position data may be outdated.
             </div>
           </div>
         )}
