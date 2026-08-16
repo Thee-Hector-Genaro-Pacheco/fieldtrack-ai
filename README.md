@@ -27,7 +27,7 @@ FieldTrack AI is an open-source, industrial-grade edge telemetry and hardware se
 - [17. Environment Variable Documentation](#17-environment-variable-documentation)
 - [18. Testing, Linting, and Production Build Commands](#18-testing-linting-and-production-build-commands)
 - [19. Troubleshooting Guide](#19-troubleshooting-guide)
-- [20. AWS and Domain Deployment Architecture](#20-aws-and-domain-deployment-architecture)
+- [20. Deployment Status](#20-deployment-status)
 - [21. Security and Privacy Controls](#21-security-and-privacy-controls)
 - [22. Screenshots and Demonstration Video](#22-screenshots-and-demonstration-video)
 - [23. Educational Curriculum Applications](#23-educational-curriculum-applications)
@@ -892,39 +892,25 @@ npm run build
 
 ---
 
-## 20. AWS and Domain Deployment Architecture
+## 20. Deployment Status
 
-> [!NOTE]
-> **Deployment Status**: FieldTrack AI currently operates as an edge-native Raspberry Pi platform. The cloud deployment architecture outlined below represents the planned production infrastructure pipeline for remote central fleet management.
+FieldTrack AI currently operates as an edge-native Raspberry Pi 5 platform. The Raspberry Pi runs the physical hardware agent, Edge AI API, WebSocket services, and local dashboard runtime.
 
-```mermaid
-flowchart LR
-    subgraph fleet["Raspberry Pi 5 Edge Fleet"]
-        Pi1["Raspberry Pi 5 #1\n(Field Unit)"]
-        Pi2["Raspberry Pi 5 #2\n(Field Unit)"]
-    end
+### Current Deployment Model
 
-    subgraph aws["AWS Cloud Infrastructure (Planned)"]
-        Route53["Route 53 DNS\n(fieldtrack.ai)"]
-        CF["CloudFront CDN\n(TLS / SSL Certificate)"]
-        S3["Amazon S3\n(Static Dashboard Assets)"]
-        ALB["Application Load Balancer"]
-        ECS["Amazon ECS / Fargate\n(FastAPI Telemetry Aggregator)"]
-        Dynamo["Amazon DynamoDB\n(Telemetry History & Events)"]
-    end
-
-    Pi1 -->|HTTPS Telemetry & Snapshots| ALB
-    Pi2 -->|HTTPS Telemetry & Snapshots| ALB
-    Route53 --> CF
-    CF --> S3
-    CF --> ALB
-    ALB --> ECS
-    ECS --> Dynamo
+```
+Raspberry Pi 5 Hardware
+        ↓
+Python Pi Agent (apps/pi-agent @ Port 8000)
+        ↓
+Node / TypeScript Edge AI API (apps/api @ Port 8001)
+        ↓
+WebSocket Server (ws://192.168.2.2:8080)
+        ↓
+React / Vite Dashboard (apps/web @ Port 5173)
 ```
 
-- **CloudFront & S3**: Static web dashboard hosting with edge caching and ACM TLS certificate termination.
-- **Application Load Balancer (ALB) & ECS Fargate**: Scalable containerized API gateway receiving encrypted JSON telemetry and snapshot uploads from remote field devices.
-- **DynamoDB**: Low-latency NoSQL persistence for historical telemetry, motion logs, and device health audits.
+Remote cloud hosting and centralized fleet infrastructure are future possibilities but are not currently implemented.
 
 ---
 
@@ -980,7 +966,7 @@ FieldTrack AI serves as the capstone reference project for the **Controls to Cod
 - [x] Double-buffered 16x2 I2C LCD telemetry rotation & priority alerts
 - [ ] WebSocket connection support for sub-second telemetry pushing
 - [ ] On-device SQLite/SiaDB event storage
-- [ ] AWS ECS / CloudFront cloud fleet management infrastructure
+- [ ] Remote cloud fleet management & telemetry aggregation
 
 ---
 
