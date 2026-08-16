@@ -71,50 +71,118 @@ FieldTrack AI was developed to demonstrate that hardware signals at the edge sho
 
 ## 4. System Architecture
 
-FieldTrack AI follows a decoupled edge-client architecture. The Raspberry Pi 5 runs the `pi-agent` Python backend, managing hardware resources via non-blocking background threads and exposing REST / streaming HTTP endpoints. The `web` frontend communicates with `pi-agent` over local Ethernet or Wi-Fi network links.
+FieldTrack AI follows a decoupled, multi-layer edge architecture consisting of three primary runtime subsystems:
+
+1. **Python Raspberry Pi 5 Edge Agent (`apps/pi-agent`)**: Runs natively on the Single-Board Computer at `http://192.168.2.2:8000` (or `http://<pi-ip>:8000`). Manages physical hardware sensors via asynchronous background threads, providing Logitech C930e 720p 30 FPS MJPEG video streaming (`/camera/stream`), UART serial NMEA GPS parsing (`/telemetry/current`), PIR motion detection (`/motion/status`, `/motion/events`), automatic motion snapshot capture (`/camera/status`, `/camera/snapshot`), double-buffered PCF8574 I2C 16x2 LCD status rotation, and Raspberry Pi diagnostics (CPU temperature, uptime, serial health).
+2. **Node / TypeScript Edge AI API (`apps/api`)**: Serves an edge REST API on `http://192.168.2.2:8001` and a low-latency WebSocket server on `ws://192.168.2.2:8080`. Consumes the live MJPEG video stream from `pi-agent` via `cameraService.ts`, decodes JPEG frames, executes real-time hand pose detection using TensorFlow.js and MediaPipe via `handDetectorService.ts`, extracts 21 3D hand landmarks, and calculates deterministic finger joint geometry and temporal stabilization via `fingerCounterService.ts`.
+3. **React / Vite Web Dashboard (`apps/web`)**: Runs at `http://localhost:5173`. Connects to `pi-agent` for telemetry polling and video streaming, while maintaining a high-speed WebSocket connection with `apps/api` for real-time hand gesture tracking and dynamic visual alerts.
+
+```
+                    FIELDTRACK AI
+                         │
+         ┌───────────────┼────────────────┐
+         │               │                │
+         ▼               ▼                ▼
+    React/Vite       Node/TS API      Python Pi Agent
+     Dashboard        Edge AI           Hardware
+         │               │                │
+         │               │        ┌───────┼────────┐
+         │               │        │       │        │
+         │               │      Camera   GPS      PIR
+         │               │
+         │          TensorFlow.js /
+         │          Hand Pose Detection
+         │               │
+         └──── WebSocket ┘
+```
+
+### Complete Layered System Architecture
 
 ```mermaid
 flowchart TB
-    subgraph Physical Sensors & Hardware
+    subgraph physical["Physical Sensors & Hardware"]
         GPS["NEO-6M GPS Module\n(UART /dev/ttyAMA0 @ 9600 baud)"]
         PIR["PIR Motion Sensor\n(GPIO17 / Physical Pin 11)"]
         CAM["Logitech C930e Webcam\n(USB /dev/video0 @ 720p 30FPS)"]
         LCD["16x2 I2C LCD Display\n(I2C Bus 1 / Addr 0x27)"]
     end
 
-    subgraph Raspberry Pi 5 Edge Agent ("apps/pi-agent")
-        subgraph Hardware Service Layer
+    subgraph pi_agent["Python Raspberry Pi 5 Edge Agent (apps/pi-agent @ Port 8000)"]
+        subgraph hardware_services["Hardware Service Layer"]
             GPS_S["gps_reader.py\n(pynmea2 Serial Reader)"]
             PIR_S["motion_service.py\n(gpiozero / lgpio Queue)"]
-            CAM_S["camera_service.py\n(OpenCV V4L2 MJPEG)"]
+            CAM_S["camera_service.py\n(OpenCV V4L2 MJPEG Streamer)"]
             LCD_S["lcd_service.py\n(Double-Buffered PCF8574)"]
         end
 
-        API["FastAPI Web Server\n(main.py / Uvicorn @ Port 8000)"]
+        FASTAPI["FastAPI Web Server\n(main.py / Uvicorn @ Port 8000)"]
     end
 
-    subgraph Frontend Dashboard ("apps/web")
-        HOOKS["React Hooks\n(useTelemetry, useCamera, useMotion)"]
+    subgraph edge_api["Node / TypeScript Edge AI API (apps/api @ Port 8001 / WS 8080)"]
+        CAM_NODE["cameraService.ts\n(MJPEG Stream Ingestion & JPEG Decode)"]
+        TF_DETECTOR["handDetectorService.ts\n(TensorFlow.js / MediaPipe Hand Pose)"]
+        FINGER_CTR["fingerCounterService.ts\n(Joint Geometry & Stabilization)"]
+        WS_SERVER["websocketServer.ts\n(Real-Time WebSocket @ Port 8080)"]
+    end
+
+    subgraph frontend["React / Vite Dashboard (apps/web @ Port 5173)"]
+        HOOKS["React Custom Hooks\n(useTelemetry, useCamera, useMotion, useWebSocket)"]
         UI["React 18 Component UI\n(TelemetryDashboard, MapPanel, CameraPanel, MotionPanel)"]
         MAP["Leaflet Map Engine\n(OpenStreetMap Dark Tiles)"]
     end
 
     GPS -->|NMEA Sentences| GPS_S
     PIR -->|Digital HIGH/LOW| PIR_S
-    CAM -->|V4L2 Frames| CAM_S
+    CAM -->|V4L2 Video Frames| CAM_S
     LCD_S -->|I2C Nibbles| LCD
 
     PIR_S -.->|Trigger Auto-Snapshot| CAM_S
     PIR_S -.->|Override Display| LCD_S
 
-    GPS_S --> API
-    PIR_S --> API
-    CAM_S --> API
-    LCD_S --> API
+    GPS_S --> FASTAPI
+    PIR_S --> FASTAPI
+    CAM_S --> FASTAPI
+    LCD_S --> FASTAPI
 
-    API -->|HTTP REST & MJPEG Stream| HOOKS
+    FASTAPI -->|MJPEG Stream /camera/stream| CAM_NODE
+    CAM_NODE -->|Decoded JPEG Buffer| TF_DETECTOR
+    TF_DETECTOR -->|21 3D Hand Landmarks| FINGER_CTR
+    FINGER_CTR -->|Stabilized Finger States & Telemetry| WS_SERVER
+
+    FASTAPI -->|HTTP REST Telemetry & Snapshots| HOOKS
+    WS_SERVER -->|WebSocket Landmark & Gesture Stream| HOOKS
     HOOKS --> UI
     UI --> MAP
+```
+
+### Real Physical Camera & AI Inference Pipeline
+
+FieldTrack AI executes computer vision on real live camera frames captured from the physical Logitech C930e USB hardware:
+
+```
+Logitech C930e Camera
+        ↓
+Python Pi Agent (apps/pi-agent)
+        ↓
+MJPEG Video Stream (/camera/stream)
+        ↓
+Node cameraService (apps/api)
+        ↓
+JPEG Frame Decoding (jpeg-js)
+        ↓
+TensorFlow.js (tfjs-core / MediaPipe)
+        ↓
+Hand Pose Detection
+        ↓
+21 3D Hand Landmarks
+        ↓
+Finger Joint Geometry Evaluation
+        ↓
+Temporal Stabilization (Majority Voting)
+        ↓
+WebSocket Server (ws://192.168.2.2:8080)
+        ↓
+React Dashboard (apps/web)
 ```
 
 ---
@@ -124,6 +192,22 @@ flowchart TB
 ```
 fieldtrack-ai/
 ├── apps/
+│   ├── api/                       # Node.js / TypeScript Edge AI API & Hand Pose Server
+│   │   ├── package.json           # Dependencies (@tensorflow/tfjs, @mediapipe/tasks-vision, ws, express)
+│   │   ├── tsconfig.json          # TypeScript configuration
+│   │   ├── models/                # Offline edge model storage
+│   │   │   └── hand-pose/         # MediaPipe 3D Hand Pose detector & landmark model shards
+│   │   ├── scripts/               # Downloader & helper scripts
+│   │   │   └── download-models.js # Offline model setup script (npm run setup:models)
+│   │   └── src/
+│   │       ├── index.ts           # Express REST API & service entrypoint
+│   │       ├── config.ts          # Environment variables & model configuration
+│   │       ├── cameraService.ts   # MJPEG stream ingestion & JPEG frame decoder
+│   │       ├── handDetectorService.ts # TensorFlow.js / MediaPipe hand pose inference engine
+│   │       ├── fingerCounterService.ts # Deterministic 3D finger geometry & temporal stabilizer
+│   │       ├── fingerCounterService.test.ts # Deterministic unit tests (9 passed, 0 failed)
+│   │       ├── websocketServer.ts # High-throughput WebSocket server (Port 8080)
+│   │       └── utils/             # Network address & helper utilities
 │   ├── pi-agent/                  # Python FastAPI Raspberry Pi Edge Agent
 │   │   ├── main.py                # FastAPI app routes & lifespan lifecycle handlers
 │   │   ├── models.py              # Pydantic data models (Telemetry, CameraStatus, MotionStatus)
@@ -305,9 +389,11 @@ sequenceDiagram
 
 ## 11. Backend Architecture
 
-The backend (`apps/pi-agent`) is built on **FastAPI** and **Uvicorn**, structured around singleton service controllers managed by FastAPI's asynchronous lifespan handler.
+### 11.1 Python Pi Hardware Agent (`apps/pi-agent`)
 
-### Key Python Modules
+The hardware agent (`apps/pi-agent`) is built on **FastAPI** and **Uvicorn**, structured around singleton service controllers managed by FastAPI's asynchronous lifespan handler.
+
+#### Key Python Modules
 
 - `main.py`: Initializes the FastAPI application, CORS middleware, lifespan lifecycle startup/shutdown tasks, and HTTP endpoint routes.
 - `models.py`: Strongly typed Pydantic models (`Telemetry`, `DeviceHealth`, `CameraStatus`, `SnapshotResponse`, `MotionStatus`, `MotionEvent`).
@@ -315,6 +401,70 @@ The backend (`apps/pi-agent`) is built on **FastAPI** and **Uvicorn**, structure
 - `camera_service.py`: Singleton `CameraService` running a thread-safe OpenCV capture loop. Stores the latest frame bytes behind a `threading.Lock()`, calculates actual FPS, and writes JPEGs to `snapshots/`.
 - `motion_service.py`: Singleton `MotionService` using `gpiozero` and `lgpio`. Enqueues motion events into a `queue.Queue()`, processes them in a background worker thread, handles warm-up/cooldown timers, and maintains a bounded event log (`deque(maxlen=100)`).
 - `lcd_service.py`: Singleton `LCDService` driving the PCF8574 16x2 LCD. Features a 4-bit HD44780 initialization sequence, marquee scrolling, live telemetry screen generation, priority alert queueing, and double-buffered rendering.
+
+---
+
+### 11.2 Node / TypeScript Edge AI API (`apps/api`)
+
+The Edge AI API (`apps/api`) provides real-time computer vision and 3D hand pose inference by consuming the physical Raspberry Pi camera stream.
+
+#### Key TypeScript Services
+
+- `cameraService.ts`: Connects to the Pi Agent HTTP MJPEG stream (`/camera/stream`), decodes incoming boundary JPEG frames using `jpeg-js`, and pipes raw pixel buffers to the hand detection pipeline.
+- `handDetectorService.ts`: Initializes TensorFlow.js (`@tensorflow/tfjs-core`, `@tensorflow/tfjs-backend-wasm`, `@tensorflow/tfjs-backend-cpu`) and MediaPipe Hand Pose detector. Converts decoded image buffers into 21 3D hand landmarks ($x, y, z$).
+- `fingerCounterService.ts`: Evaluates 3D joint angles, finger segment vectors, and handedness geometry to determine extended fingers. Applies a 5-frame rolling window majority-vote temporal stabilizer.
+- `websocketServer.ts`: Broadcasts high-frequency hand pose telemetry, finger counts, and frame latency metrics to web clients over WebSocket (`ws://0.0.0.0:8080`).
+
+#### Offline Edge AI Model Architecture
+
+FieldTrack AI supports local, offline model loading on the Raspberry Pi:
+
+- **Local Storage Path**: `apps/api/models/hand-pose/` (detector and landmark `.json` manifest and `.bin` tensor shard files).
+- **Automated Model Provisioning**: `apps/api/scripts/download-models.js` executed via `npm run setup:models`.
+- **Environment Configuration**: Configurable via `HAND_MODEL_PATH`.
+- **Offline Inference Claim**: Hand pose detection runs locally on edge hardware without retrieving models from TFHub or external cloud endpoints at runtime.
+
+#### Geometric Finger Counting & Stabilization Mechanics
+
+Finger extension is calculated deterministically from 3D joint landmark coordinates:
+
+1. **PIP & DIP Joint Angles**: Computes 3D interior angles formed by vertex landmarks (MCP $\rightarrow$ PIP $\rightarrow$ DIP $\rightarrow$ TIP). Angles $\ge 140^\circ$ (PIP) and $\ge 135^\circ$ (DIP) indicate finger extension.
+2. **Wrist-Distance Ratios**: Verifies that the TIP-to-wrist distance exceeds the PIP-to-wrist distance by a factor $> 1.05$.
+3. **Handedness-Aware Thumb Geometry**: Evaluates thumb CMC/MCP/IP joint angles ($\ge 130^\circ$), TIP-to-PinkyMCP distance ratio ($> 1.08$), and lateral outward X-axis projection relative to palm orientation (Left vs. Right hand).
+4. **Temporal Stabilization**: Pushes raw per-frame states into a rolling history window (`WINDOW_SIZE = 5`). Applies majority voting across the window to eliminate single-frame detection drops or rapid flickering. Implements a 3-consecutive-no-hand-frame hysteresis threshold before resetting state.
+
+#### Real-Time Telemetry Payload Structure
+
+WebSocket clients receive structured JSON telemetry payloads:
+
+```json
+{
+  "handDetected": true,
+  "fingers": 2,
+  "confidence": 0.98,
+  "handedness": "Right",
+  "rawFingerStates": {
+    "thumb": false,
+    "index": true,
+    "middle": true,
+    "ring": false,
+    "pinky": false
+  },
+  "stabilizedFingerStates": {
+    "thumb": false,
+    "index": true,
+    "middle": true,
+    "ring": false,
+    "pinky": false
+  },
+  "frameSequence": 1420,
+  "frameAgeMs": 18,
+  "inferenceLatencyMs": 32,
+  "frameByteSize": 45120,
+  "fps": 20.0,
+  "timestamp": 1771195200000
+}
+```
 
 ---
 
@@ -330,7 +480,7 @@ The web dashboard (`apps/web`) is a modern React 18 single-page application buil
 - `MapPanel.tsx`: Interactive Leaflet map rendering generalized 2-decimal coordinates (~1.1 km accuracy) with a soft cyan proximity circle and custom dark OpenStreetMap tiles.
 - `CameraPanel.tsx`: Live camera feed player (`/camera/stream`), resolution/FPS metadata pills, snapshot capture button, latest snapshot preview thumbnail, and full-screen modal inspector.
 - `MotionPanel.tsx`: Live PIR motion state monitor with a glowing red active motion alert banner, metrics, recent events history table, geotag badges, and a manual `Test Motion Event` trigger button.
-- `useTelemetry.ts` / `useCamera.ts` / `useMotion.ts`: Custom React polling hooks managing state, error boundaries, and background API updates without memory leaks.
+- `useTelemetry.ts` / `useCamera.ts` / `useMotion.ts` / `useWebSocket.ts`: Custom React polling and WebSocket streaming hooks managing state, error boundaries, and background API updates without memory leaks.
 
 ---
 
@@ -338,7 +488,7 @@ The web dashboard (`apps/web`) is a modern React 18 single-page application buil
 
 ### General & Health Endpoints
 
-#### `GET /`
+#### `GET /` (Pi Agent @ Port 8000)
 - **Description**: Service identification root endpoint.
 - **Response**:
 ```json
@@ -348,7 +498,7 @@ The web dashboard (`apps/web`) is a modern React 18 single-page application buil
 }
 ```
 
-#### `GET /health`
+#### `GET /health` (Pi Agent @ Port 8000)
 - **Description**: System health summary endpoint for monitoring uptime and service status.
 - **Response**:
 ```json
@@ -362,6 +512,22 @@ The web dashboard (`apps/web`) is a modern React 18 single-page application buil
   "motion_state": "clear"
 }
 ```
+
+#### `GET /` (Node Edge AI API @ Port 8001)
+- **Description**: Node Edge AI REST health & status endpoint.
+- **Response**:
+```json
+{
+  "service": "FieldTrack AI - Node Edge AI API",
+  "status": "online",
+  "ws_port": 8080,
+  "python_agent": "http://localhost:8000"
+}
+```
+
+#### `WebSocket ws://192.168.2.2:8080` (Node Edge AI API)
+- **Description**: Real-time high-frequency hand landmark and gesture telemetry stream.
+- **Message Format**: JSON object containing `handDetected`, `fingers`, `confidence`, `handedness`, `rawFingerStates`, `stabilizedFingerStates`, `frameSequence`, `frameAgeMs`, `inferenceLatencyMs`, `frameByteSize`, `fps`, and `timestamp`.
 
 ---
 
@@ -520,9 +686,26 @@ pip install -r requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Step 3: Setup Web Dashboard (`apps/web`)
+### Step 3: Setup Node Edge AI API (`apps/api`)
 
 In a second terminal:
+
+```bash
+cd apps/api
+
+# Install dependencies
+npm install
+
+# Download MediaPipe offline edge AI model files
+npm run setup:models
+
+# Start Node Edge AI REST (8001) and WebSocket (8080) development server
+npm run dev
+```
+
+### Step 4: Setup Web Dashboard (`apps/web`)
+
+In a third terminal:
 
 ```bash
 cd apps/web
@@ -623,6 +806,19 @@ ssh $PI_HOST "cd $TARGET_DIR/apps/pi-agent && source .venv/bin/activate && uvico
 | `PUBLIC_DEMO_MODE` | `false` | Enables session coordinate offset for public demos |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated CORS allowed origins |
 
+### Node Edge AI API (`apps/api`)
+
+| Variable Name | Default Value | Description |
+| :--- | :--- | :--- |
+| `HOST` | `0.0.0.0` | Listen host interface address for Edge AI REST API |
+| `PORT` | `8001` | HTTP REST API port (Node API runs on 8001; Python Agent owns 8000) |
+| `WS_PORT` | `8080` | High-frequency WebSocket server streaming port |
+| `PYTHON_AGENT_URL` | `http://localhost:8000` | Base URL of the Python Pi Agent hardware server |
+| `HAND_MODEL_PATH` | `models/hand-pose` | Local relative directory for offline MediaPipe hand pose model shards |
+| `FRAME_WIDTH` | `480` | Ingestion width for computer vision frame decoding |
+| `FRAME_HEIGHT` | `360` | Ingestion height for computer vision frame decoding |
+| `TARGET_FPS` | `20` | Target inference frame rate in FPS |
+
 ### Frontend (`apps/web`)
 
 | Variable Name | Default Value | Description |
@@ -633,7 +829,7 @@ ssh $PI_HOST "cd $TARGET_DIR/apps/pi-agent && source .venv/bin/activate && uvico
 
 ## 18. Testing, Linting, and Production Build Commands
 
-### Backend Pytest Suite
+### Backend Pytest Suite (`apps/pi-agent`)
 
 Run all 36 automated unit tests covering GPS ingestion, camera streaming, motion queues, path traversal security, and LCD double-buffering:
 
@@ -642,7 +838,32 @@ cd apps/pi-agent
 .venv/bin/pytest -v
 ```
 
-### Frontend Linting & Production Build
+### Node Edge AI Deterministic Unit Tests (`apps/api`)
+
+Run the deterministic finger counter unit test suite:
+
+```bash
+cd apps/api
+npx tsx src/fingerCounterService.test.ts
+```
+
+#### Deterministic Test Cases & Results
+
+| Test Case | Description | Expected Outcome | Status |
+| :--- | :--- | :--- | :--- |
+| **Test 1: Fist** | All fingers folded | Evaluates to 0 fingers | ✅ PASS |
+| **Test 2: Index Only** | Index extended, others folded | Evaluates to 1 finger | ✅ PASS |
+| **Test 3: Peace Sign** | Index & Middle extended | Evaluates to 2 fingers | ✅ PASS |
+| **Test 4: Three Fingers** | Index, Middle & Ring extended | Evaluates to 3 fingers | ✅ PASS |
+| **Test 5: Four Fingers** | Four fingers extended (Thumb folded) | Evaluates to 4 fingers | ✅ PASS |
+| **Test 6: Open Palm** | All 5 fingers extended | Evaluates to 5 fingers | ✅ PASS |
+| **Test 7: Right Thumb** | Right hand thumb lateral extension | Evaluates thumb extended correctly | ✅ PASS |
+| **Test 8: Left Thumb** | Left hand thumb lateral extension | Evaluates thumb extended correctly | ✅ PASS |
+| **Test 9: Curled Fingers** | Partially curled joint angles | Rejected and evaluates to 0 fingers | ✅ PASS |
+
+**Test Result Summary**: **9 passed | 0 failed**
+
+### Frontend Linting & Production Build (`apps/web`)
 
 ```bash
 cd apps/web
@@ -678,12 +899,12 @@ npm run build
 
 ```mermaid
 flowchart LR
-    subgraph Raspberry Pi 5 Edge Fleet
+    subgraph fleet["Raspberry Pi 5 Edge Fleet"]
         Pi1["Raspberry Pi 5 #1\n(Field Unit)"]
         Pi2["Raspberry Pi 5 #2\n(Field Unit)"]
     end
 
-    subgraph AWS Cloud Infrastructure (Planned)
+    subgraph aws["AWS Cloud Infrastructure (Planned)"]
         Route53["Route 53 DNS\n(fieldtrack.ai)"]
         CF["CloudFront CDN\n(TLS / SSL Certificate)"]
         S3["Amazon S3\n(Static Dashboard Assets)"]
